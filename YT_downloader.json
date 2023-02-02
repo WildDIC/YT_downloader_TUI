@@ -1,0 +1,28 @@
+{
+    "ytdir" : "COMMON_PATH_TO_YT_DIRECTORY",
+
+    "mylists" : {
+        "PLAYLIST_ID":    "FOLDER_UNDER_ytdir_FOR_FILES"
+    },
+
+    "mychannels" : {
+        "FOLDER_UNDER_ytdir_FOR_FILES": "@CHANNEL_ID"
+    },
+
+    "myvideos" : {
+        "FOLDER_UNDER_ytdir_FOR_FILES": [
+        	"VIDEO_ID",
+        	"OTHER_VIDEO_ID"
+        ]
+    },
+
+    "defaultres" : {
+        "1080p" : [
+            "FOLDER_UNDER_ytdir_FOR_FILES"
+        ],
+        "480p" : [
+            "OTHER_FOLDER_UNDER_ytdir_FOR_FILES"
+        ]
+    }
+
+}
