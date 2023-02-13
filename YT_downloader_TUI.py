@@ -394,8 +394,10 @@ class YT_downloader():
         path = 'image://video@' + encf + '/'
         bpath = path.lower().encode('utf8')
         c = CRC.crc32_mpeg2(msg=bpath)
+        tmb_file = c[2:].zfill(8)
+        tmb_fold = tmb_file[0]
 
-        dst = f"{tmb_path}/{c[2]}/{c[2:]}.jpg"
+        dst = f"{tmb_path}/{tmb_fold}/{tmb_file}.jpg"
         shutil.copyfile(image, dst)
 
         idata = ffmpeg.probe(image)
@@ -405,7 +407,7 @@ class YT_downloader():
         with conn:
             cur = conn.cursor()
             sql = 'INSERT INTO texture (url, cachedurl) VALUES (?, ?)'
-            values = (path, f'{c[2]}/{c[2:]}.jpg')
+            values = (path, f'{tmb_fold}/{tmb_file}.jpg')
             cur.execute(sql, values)
             idTmb = cur.lastrowid
             sql = 'INSERT INTO sizes \
@@ -419,7 +421,7 @@ class YT_downloader():
             )
             cur.execute(sql, values)
             logwin.addstr(f'Inserted ID={idTmb}\n', self.clr[2])
-            logwin.addstr(c[2:] + '.jpg added\n', self.clr[2])
+            logwin.addstr(tmb_file + '.jpg added\n', self.clr[2])
             logwin.refresh()
 
         # Удаление временных файлов
