@@ -7,12 +7,16 @@ import ffmpeg
 import json
 import csv
 import os
+import sys
 import re
+import pickle
+from deepdiff import DeepDiff
 from pathlib import Path
 import subprocess
 import curses
 import requests
 from urllib.error import HTTPError
+import http.client as HTTPClient
 from datetime import datetime
 import urllib.parse
 import sqlite3
@@ -22,6 +26,8 @@ import shutil
 image = "e:\\Data\\cover.jpg"
 
 export_file = 'youtube_export_history.csv'
+
+problem_file = 'youtube_problem_links.csv'
 
 resolutions = [
     "4320p",
@@ -75,11 +81,34 @@ class YT_downloader():
         with open('YT_downloader.json', encoding="utf8") as file:
             data = json.load(file)
 
+            if len(sys.argv) > 1:
+                if sys.argv[1] == "-update":
+                    olddata = pickle.load(open("YT_downloader.pkl", "rb"))
+                    diff = DeepDiff(olddata, data, view='tree')
+                    mylists = {}
+                    mychannels = {}
+                    myvideos = {}
+                    if 'dictionary_item_added' in diff:
+                        for d in diff['dictionary_item_added']:
+                            path = d.path(output_format='list')
+                            if path[0] == 'mylists':
+                                mylists[path[1]] = d.t2
+                            elif path[0] == 'mychannels':
+                                mychannels[path[1]] = d.t2
+                    if 'iterable_item_added' in diff:
+                        for i in diff['iterable_item_added']:
+                            path = i.path(output_format='list')
+                            if path[1] not in myvideos:
+                                myvideos[path[1]] = []
+                            myvideos[path[1]].extend([i.t2])
+            else:
+                mylists = data['mylists']
+                mychannels = data['mychannels']
+                myvideos = data['myvideos']
+
             ytdir = data['ytdir']
-            mylists = data['mylists']
-            mychannels = data['mychannels']
-            myvideos = data['myvideos']
             defaultres = data['defaultres']
+            # pickle.dump(data, open("YT_downloader.pkl", "wb"))
 
         total_folders = len(mylists)
         folder_count = 0
@@ -129,7 +158,8 @@ class YT_downloader():
                 if not os.path.exists(csv_file):
                     open(csv_file, 'w').close()
                 self.DownloadChannel(
-                    channel_link="https://www.youtube.com/"+mychannels[folder],
+                    channel_link="https://www.youtube.com/@" +
+                                 mychannels[folder] + "/videos",
                     folder=dirpath,
                     maxres=maxres)
 
@@ -160,7 +190,7 @@ class YT_downloader():
                     folder=dirpath,
                     maxres=maxres)
 
-    def safe_filename(self, s: str, max_length: int=255) -> str:
+    def safe_filename(self, s: str, max_length: int = 255) -> str:
         """Sanitize a string making it safe to use as a filename.
 
         This function was based off the limitations outlined here:
@@ -270,7 +300,7 @@ class YT_downloader():
                 logwin.addstr(f"Download Start {res[key]}\n", self.clr[2])
                 logwin.refresh()
 
-                video_file = streams[key].download()
+                video_file = streams[key].download(max_retries=10)
             except HTTPError as err:
                 print(err)
                 self.DownloadVideo(video_link, folder, filename, maxres=maxres)
@@ -279,6 +309,23 @@ class YT_downloader():
                 print(err)
                 self.DownloadVideo(video_link, folder, filename, maxres=maxres)
                 return None
+            except HTTPClient.IncompleteRead as err:
+                print(err)
+                if res.get(key + 1) is not None:
+                    self.DownloadVideo(video_link, folder, filename, maxres=res[key + 1])
+                with open(problem_file, 'a', newline='') as errcsvf:
+                    dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    spamwriter = csv.writer(errcsvf, quoting=csv.QUOTE_MINIMAL)
+                    spamwriter.writerow([dt, video_link, 'IncompleteRead', res[key]])
+                return None
+            except pytubeexceptions.AgeRestrictedError as err:
+                print(err)
+                with open(problem_file, 'a', newline='') as errcsvf:
+                    dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    spamwriter = csv.writer(errcsvf, quoting=csv.QUOTE_MINIMAL)
+                    spamwriter.writerow([dt, video_link, 'AgeRestrictedError'])
+                return 'Restricted'
+
         logwin.addstr("Download Done\n", self.clr[2])
         logwin.refresh()
 
@@ -368,7 +415,7 @@ class YT_downloader():
         logwin.refresh()
 
         # Сохранение описания видео в .nfo файл
-        logwin.addstr("Add KODI thumbnail\n", self.clr[2])
+        logwin.addstr("Add NFO file\n", self.clr[2])
         logwin.refresh()
 
         nfo_name = filename[:-4] + ".nfo"
@@ -380,6 +427,8 @@ class YT_downloader():
         os.utime(nfopathstr, times=(filedate, filedate))
 
         # Копируем обложку в кэш KODI
+        logwin.addstr("Add KODI thumbnail\n", self.clr[2])
+        logwin.refresh()
         db_path = "v:\\KODI\\Database\\Textures13.db"
         tmb_path = 'v:\\KODI\\Thumbnails'
         f = str(pathstr)
@@ -475,12 +524,14 @@ class YT_downloader():
                 self.stdscr.refresh()
 
                 if not os.path.exists(Path(folder, video_name)):
-                    self.DownloadVideo(
+                    err = self.DownloadVideo(
                         video_link=video,
                         folder=folder,
                         filename=video_name,
                         maxres=maxres
                     )
+                    if err == "Restricted":
+                        continue
                 else:
                     cntstr = (
                         f'Video {video_count}/{total_video}'
