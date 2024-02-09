@@ -325,6 +325,13 @@ class YT_downloader():
                     spamwriter = csv.writer(errcsvf, quoting=csv.QUOTE_MINIMAL)
                     spamwriter.writerow([dt, video_link, 'AgeRestrictedError'])
                 return 'Restricted'
+            except pytubeexceptions.LiveStreamError as err:
+                print(err)
+                with open(problem_file, 'a', newline='') as errcsvf:
+                    dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    spamwriter = csv.writer(errcsvf, quoting=csv.QUOTE_MINIMAL)
+                    spamwriter.writerow([dt, video_link, 'LiveStreamError'])
+                return 'LiveStream'
 
         logwin.addstr("Download Done\n", self.clr[2])
         logwin.refresh()
@@ -350,6 +357,7 @@ class YT_downloader():
                     audio_file = video_file
                     logwin.addstr("Audio Presents\n", self.clr[2])
                     logwin.refresh()
+                    shutil.copyfile(f"{video_file}", f"_{filename}")
 
         if not hasaudio:
             logwin.addstr("Audio Started\n", self.clr[2])
@@ -359,38 +367,38 @@ class YT_downloader():
                 download(filename_prefix="audio_")
             logwin.addstr("Audio Done\n", self.clr[2])
 
-        logwin.addstr("Concatenation Started\n", self.clr[2])
-        logwin.refresh()
+            logwin.addstr("Concatenation Started\n", self.clr[2])
+            logwin.refresh()
 
-        # Объединение видео и аудио
-        cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" \
-            -filter_complex [0][1]concat=a=1:n=1:v=1[s0] -map [s0] \
-            "_{filename}"'
+            # Объединение видео и аудио
+            cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" \
+                -filter_complex [0][1]concat=a=1:n=1:v=1[s0] -map [s0] \
+                "_{filename}"'
 
-        reg = re.compile(r'(\d\d:\d\d:\d\d).*')
+            reg = re.compile(r'(\d\d:\d\d:\d\d).*')
 
-        with subprocess.Popen(cmd,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              bufsize=1,
-                              encoding='cp1251', errors='ignore') as process:
-            for line in process.stderr:
-                if 'frame=' in line:
-                    coderwin.addstr(1, 0, line, self.clr[2])
-                    coderwin.refresh()
+            with subprocess.Popen(cmd,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  bufsize=1,
+                                  encoding='cp1251', errors='ignore') as process:
+                for line in process.stderr:
+                    if 'frame=' in line:
+                        coderwin.addstr(1, 0, line, self.clr[2])
+                        coderwin.refresh()
 
-                    ret = reg.search(line)
-                    if ret:
-                        tmSplit = ret.group(1).split(':')
-                        curDuration = (int(tmSplit[0]) * 3600) \
-                            + (int(tmSplit[1]) * 60) \
-                            + int(tmSplit[2])
-                        perc = round(((curDuration / vdur) * 100), 1)
+                        ret = reg.search(line)
+                        if ret:
+                            tmSplit = ret.group(1).split(':')
+                            curDuration = (int(tmSplit[0]) * 3600) \
+                                + (int(tmSplit[1]) * 60) \
+                                + int(tmSplit[2])
+                            perc = round(((curDuration / vdur) * 100), 1)
 
-                        curdurstr = f'Video done    : {ret.group(1)} - {perc}%'
-                        self.fill_line(5, 0, curdurstr, 2)
-                        self.stdscr.refresh()
+                            curdurstr = f'Video done    : {ret.group(1)} - {perc}%'
+                            self.fill_line(5, 0, curdurstr, 2)
+                            self.stdscr.refresh()
 
-        logwin.addstr("Concatenation Done\n", self.clr[2])
+            logwin.addstr("Concatenation Done\n", self.clr[2])
 
         logwin.addstr("Add Cover\n", self.clr[2])
         logwin.refresh()
@@ -530,7 +538,9 @@ class YT_downloader():
                         filename=video_name,
                         maxres=maxres
                     )
-                    if err == "Restricted":
+                    if err in ("Restricted",
+                               "LiveStream"
+                               ):
                         continue
                 else:
                     cntstr = (
