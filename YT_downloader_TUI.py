@@ -88,13 +88,17 @@ class YT_downloader():
                     mylists = {}
                     mychannels = {}
                     myvideos = {}
+                    myshorts = {}
                     if 'dictionary_item_added' in diff:
                         for d in diff['dictionary_item_added']:
                             path = d.path(output_format='list')
-                            if path[0] == 'mylists':
-                                mylists[path[1]] = d.t2
-                            elif path[0] == 'mychannels':
-                                mychannels[path[1]] = d.t2
+                            if len(path) > 1:
+                                if path[0] == 'mylists':
+                                    mylists[path[1]] = d.t2
+                                elif path[0] == 'mychannels':
+                                    mychannels[path[1]] = d.t2
+                                elif path[0] == 'myshorts':
+                                    myshorts[path[1]] = d.t2
                     if 'iterable_item_added' in diff:
                         for i in diff['iterable_item_added']:
                             path = i.path(output_format='list')
@@ -105,6 +109,7 @@ class YT_downloader():
                 mylists = data['mylists']
                 mychannels = data['mychannels']
                 myvideos = data['myvideos']
+                myshorts = data['myshorts']
 
             ytdir = data['ytdir']
             defaultres = data['defaultres']
@@ -190,6 +195,33 @@ class YT_downloader():
                     folder=dirpath,
                     maxres=maxres)
 
+        total_folders = len(myshorts)
+        folder_count = 0
+
+        for folder in myshorts:
+            folder_count += 1
+
+            dirpath = Path(ytdir+folder)
+            strdirpath = str(dirpath)
+            self.fill_line(0, 0, strdirpath, 3)
+            strfcnt = f'{folder_count}/{total_folders}'
+            row = self.width-len(strfcnt)
+            self.stdscr.addstr(0, row, strfcnt, self.clr[3])
+
+            maxres = self.get_maxres(folder, defaultres)
+
+            if Path(dirpath).exists():
+                csv_file = Path(dirpath, export_file)
+                if not os.path.exists(csv_file):
+                    open(csv_file, 'w').close()
+                self.DownloadChannel(
+                    channel_link="https://www.youtube.com/@" +
+                                 myshorts[folder] + "/shorts",
+                    folder=dirpath,
+                    maxres=maxres)
+
+        pickle.dump(data, open("YT_downloader.pkl", "wb"))
+
     def safe_filename(self, s: str, max_length: int = 255) -> str:
         """Sanitize a string making it safe to use as a filename.
 
@@ -229,6 +261,18 @@ class YT_downloader():
         filename = regex.sub(" ", s).\
             encode('cp1251', 'ignore').decode('cp1251').replace("  ", " ")
         return filename[:max_length].rsplit(" ", 0)[0]
+
+    def find_name(self, dirpath, filename):
+        fileindex = ''
+        ext = filename[-4:]
+        name = filename.split(' #')[0]
+        if os.path.isfile(dirpath+'\\'+name+ext):
+            counter = 2
+            fileindex = ' ' + str(counter)
+            while os.path.isfile(dirpath+'\\'+name+fileindex+ext):
+                counter += 1
+                fileindex = ' ' + str(counter)
+        return name, fileindex, ext
 
     def download_cover(self, videoId):
         names = [
@@ -527,6 +571,8 @@ class YT_downloader():
                     continue
 
                 video_name = self.safe_filename(video_title) + ".mp4"
+                name, fileindex, ext = self.find_name(str(folder), video_name)
+                video_name = name + fileindex + ext
 
                 self.fill_line(3, 0, video_name, 2)
                 self.stdscr.refresh()
