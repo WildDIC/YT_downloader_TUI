@@ -6,7 +6,7 @@
     },
 
     "mychannels" : {
-        "FOLDER_UNDER_ytdir_FOR_FILES": "@CHANNEL_ID"
+        "FOLDER_UNDER_ytdir_FOR_FILES": "@CHANNEL_ID_WITHOUT_@"
     },
 
     "myvideos" : {
@@ -16,6 +16,10 @@
         ]
     },
 
+    "myshorts" : {
+        "FOLDER_UNDER_ytdir_FOR_FILES": "@CHANNEL_ID_WITHOUT_@"
+    },
+    
     "defaultres" : {
         "1080p" : [
             "FOLDER_UNDER_ytdir_FOR_FILES"
