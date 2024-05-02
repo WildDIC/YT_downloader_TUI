@@ -265,7 +265,7 @@ class YT_downloader():
     def find_name(self, dirpath, filename):
         fileindex = ''
         ext = filename[-4:]
-        name = filename.split(' #')[0]
+        name = filename[:-4].split(' #')[0].strip()
         if os.path.isfile(dirpath+'\\'+name+ext):
             counter = 2
             fileindex = ' ' + str(counter)
