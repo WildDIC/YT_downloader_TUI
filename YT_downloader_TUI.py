@@ -99,6 +99,10 @@ class YT_downloader():
                                     mychannels[path[1]] = d.t2
                                 elif path[0] == 'myshorts':
                                     myshorts[path[1]] = d.t2
+                                elif path[0] == 'myvideos':
+                                    myvideos[path[1]] = []
+                                    for i in d.t2:
+                                        myvideos[path[1]].extend([i])
                     if 'iterable_item_added' in diff:
                         for i in diff['iterable_item_added']:
                             path = i.path(output_format='list')
@@ -113,7 +117,6 @@ class YT_downloader():
 
             ytdir = data['ytdir']
             defaultres = data['defaultres']
-            # pickle.dump(data, open("YT_downloader.pkl", "wb"))
 
         total_folders = len(mylists)
         folder_count = 0
@@ -393,7 +396,9 @@ class YT_downloader():
         logwin.refresh()
 
         # Проверка аудиодорожки в скачанном файле, скачивание, если нет
+        # Проверка видеодорожки в скачанном файле, MP4 не будем перекодировать
         hasaudio = False
+        mp4video = False
         for s in vfdata['streams']:
             if s['codec_type'] == 'audio':
                 if s['codec_name'] == 'aac':
@@ -402,6 +407,9 @@ class YT_downloader():
                     logwin.addstr("Audio Presents\n", self.clr[2])
                     logwin.refresh()
                     shutil.copyfile(f"{video_file}", f"_{filename}")
+            if s['codec_type'] == 'video':
+                if s['codec_name'] == 'h264':
+                    mp4video = True
 
         if not hasaudio:
             logwin.addstr("Audio Started\n", self.clr[2])
@@ -415,9 +423,14 @@ class YT_downloader():
             logwin.refresh()
 
             # Объединение видео и аудио
-            cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" \
-                -filter_complex [0][1]concat=a=1:n=1:v=1[s0] -map [s0] \
-                "_{filename}"'
+            # MP4 не будем перекодировать
+            if mp4video:
+                cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" \
+                    -c:v copy -c:a aac "_{filename}"'
+            else:
+                cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" \
+                    -filter_complex [0][1]concat=a=1:n=1:v=1[s0] -map [s0] \
+                    "_{filename}"'
 
             reg = re.compile(r'(\d\d:\d\d:\d\d).*')
 
