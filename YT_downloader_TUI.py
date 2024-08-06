@@ -22,12 +22,15 @@ import urllib.parse
 import sqlite3
 import CRC
 import shutil
+from time import sleep
 
 image = "e:\\Data\\cover.jpg"
 
 export_file = 'youtube_export_history.csv'
 
 problem_file = 'youtube_problem_links.csv'
+
+working_file = 'yt.working'
 
 resolutions = [
     "4320p",
@@ -646,8 +649,21 @@ class YT_downloader():
 
 
 def main(stdscr):
+    with open(working_file, 'w') as f:
+        f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     YT_DL = YT_downloader(stdscr)
-    YT_DL.main()
+    try:
+        YT_DL.main()
+    except Exception as e:
+        print(e)
+    finally:
+        os.unlink(working_file)
 
-
-curses.wrapper(main)
+while True:
+    if not os.path.isfile(working_file):
+        curses.wrapper(main)
+        break
+    else:
+        print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+              'Waiting for other YTDL process finished')
+        sleep(60)
