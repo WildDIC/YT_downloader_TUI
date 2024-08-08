@@ -350,6 +350,18 @@ class YT_downloader():
                 logwin.addstr(f"Download Start {res[key]}\n", self.clr[2])
                 logwin.refresh()
 
+                # Если есть два потока с одинаковым разрешением, ищем кодек avc
+                # Если будет скачан MP4 поток, то он не будет перекодироваться
+                # Это сэкономит много времени и, часто, дисковое пространство
+                if res[key] == res[key+1]:
+                    if streams[key+1].parse_codecs()[0][:3] == 'avc':
+                        key = key + 1
+
+                size = "{:,}".format(streams[key].filesize).replace(",", " ")
+                filesize = f"Video size: {size}"
+                self.fill_line(4, 0, filesize, 2)
+                self.stdscr.refresh()
+
                 video_file = streams[key].download(max_retries=10)
             except HTTPError as err:
                 print(err)
@@ -417,6 +429,7 @@ class YT_downloader():
         if not hasaudio:
             logwin.addstr("Audio Started\n", self.clr[2])
             logwin.refresh()
+            # Выбираем аудио с максимальным битрейтом
             audio_file = video.streams.filter(only_audio=True).\
                 order_by('abr').desc().first().\
                 download(filename_prefix="audio_")
