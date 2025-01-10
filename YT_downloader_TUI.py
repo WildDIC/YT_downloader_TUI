@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf8 -*-
 
-from pytube import YouTube, Playlist, Channel
-from pytube import exceptions as pytubeexceptions
+from pytubefix import YouTube, Playlist, Channel
+from pytubefix import exceptions as pytubeexceptions
 import ffmpeg
 import json
 import csv
@@ -30,7 +30,9 @@ export_file = 'youtube_export_history.csv'
 
 problem_file = 'youtube_problem_links.csv'
 
-working_file = 'yt.working'
+working_file = 'ytdl.working'
+
+error_log = 'ytdl_error.log'
 
 resolutions = [
     "4320p",
@@ -220,9 +222,9 @@ class YT_downloader():
                 csv_file = Path(dirpath, export_file)
                 if not os.path.exists(csv_file):
                     open(csv_file, 'w').close()
-                self.DownloadChannel(
+                self.DownloadShorts(
                     channel_link="https://www.youtube.com/@" +
-                                 myshorts[folder] + "/shorts",
+                                 myshorts[folder],
                     folder=dirpath,
                     maxres=maxres)
 
@@ -347,25 +349,26 @@ class YT_downloader():
                                 key = i
                                 break
 
-                logwin.addstr(f"Download Start {res[key]}\n", self.clr[2])
-                logwin.refresh()
-
-                # Если есть два потока с одинаковым разрешением, ищем кодек avc
+                # Если несколько потоков с одинаковым разрешением, ищем кодек avc
                 # Если будет скачан MP4 поток, то он не будет перекодироваться
                 # Это сэкономит много времени и, часто, дисковое пространство
-                if res[key] == res[key+1]:
-                    if streams[key+1].parse_codecs()[0][:3] == 'avc':
-                        key = key + 1
+                keys = dict((i, res[i]) for i in res if res[i] == res[key])
+                for k in keys:
+                    if streams[k].parse_codecs()[0][:3] == 'avc':
+                        key = k
+
+                logwin.addstr(f"Download Start {res[key]}\n", self.clr[2])
+                logwin.refresh()
 
                 size = "{:,}".format(streams[key].filesize).replace(",", " ")
                 filesize = f"Video size: {size}"
                 self.fill_line(4, 0, filesize, 2)
                 self.stdscr.refresh()
-
                 video_file = streams[key].download(max_retries=10)
             except HTTPError as err:
                 print(err)
-                self.DownloadVideo(video_link, folder, filename, maxres=maxres)
+                if err.code != 403:
+                    self.DownloadVideo(video_link, folder, filename, maxres=maxres)
                 return None
             except TimeoutError as err:
                 print(err)
@@ -451,7 +454,8 @@ class YT_downloader():
             reg = re.compile(r'(\d\d:\d\d:\d\d).*')
 
             with subprocess.Popen(cmd,
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE,
                                   bufsize=1,
                                   encoding='cp1251', errors='ignore') as process:
                 for line in process.stderr:
@@ -643,8 +647,22 @@ class YT_downloader():
         self.DownloadList(list_videos, folder, maxres)
 
     def DownloadChannel(self, channel_link, folder, maxres=None):
-        list_videos = Channel(channel_link).video_urls
-        self.DownloadList(list_videos, folder, maxres)
+        try:
+            lv = Channel(channel_link).video_urls
+            list_videos = ['https://www.youtube.com/watch?v=' +
+                           i.watch_url[-11:] for i in lv]
+            self.DownloadList(list_videos, folder, maxres)
+        except:
+            pass
+
+    def DownloadShorts(self, channel_link, folder, maxres=None):
+        try:
+            lv = Channel(channel_link).shorts
+            list_videos = ['https://www.youtube.com/watch?v=' +
+                           i.watch_url[-11:] for i in lv]
+            self.DownloadList(list_videos, folder, maxres)
+        except:
+            pass
 
     def fill_line(self, line, col, string, pair):
         self.stdscr.addstr(line, col, string, self.clr[pair])
@@ -665,10 +683,12 @@ def main(stdscr):
     with open(working_file, 'w') as f:
         f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     YT_DL = YT_downloader(stdscr)
+
     try:
         YT_DL.main()
     except Exception as e:
-        print(e)
+        with open(error_log, 'w') as f:
+            f.write(str(e))
     finally:
         os.unlink(working_file)
 
